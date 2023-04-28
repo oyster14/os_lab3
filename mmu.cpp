@@ -38,6 +38,7 @@ typedef struct {
 class Pager {
    public:
     virtual frame_t *select_victim_frame() = 0;
+    int hand = 0;
 };
 
 Pager *THE_PAGER = nullptr;
@@ -133,14 +134,13 @@ void init_processes(string &ifile_name) {
     unsigned s, e;
     bool w, f;
     int proc_tot = -1;
+    int vma_size = -1;
     int pid_num = 0;
     int vma_num = 0;
     string line;
     while (getline(ifile, line)) {
         if (line[0] == '#') {
-            if (pid_num == proc_tot) {
-                break;
-            }
+            continue;
         } else {
             if (line.size() == 1) {
                 if (proc_tot == -1) {
@@ -150,25 +150,35 @@ void init_processes(string &ifile_name) {
                     Process *process = new Process(pid_num);
                     process_order[pid_num] = process;
                     pid_num++;
-                    process->vmas.resize(stoi(line));
+                    vma_size = stoi(line);
+                    process->vmas.resize(vma_size);
                     vma_num = 0;
                 }
             } else {
                 istringstream ss(line);
                 ss >> s >> e >> w >> f;
                 process_order[pid_num - 1]->vmas[vma_num++] = {s, e, w, f};
+                if (pid_num == proc_tot && vma_num == vma_size) {
+                    break;
+                }
             }
         }
     }
 }
 
 bool get_next_instruction(char *op, unsigned *vpage) {
-    ifile >> *op >> *vpage;
-    if (ifile.fail() || *op == '#') {
-        ifile.close();
-        return false;
+    string line;
+    while (getline(ifile, line)) {
+        if (line[0] == '#') {
+            continue;
+        } else {
+            stringstream ss(line);
+            ss >> *op >> *vpage;
+            return true;
+        }
     }
-    return true;
+    ifile.close();
+    return false;
 }
 
 // --- end --- process ---
@@ -257,9 +267,6 @@ class FIFO : public Pager {
         hand = (hand + 1) % num_frames;
         return fp;
     };
-
-   private:
-    int hand = 0;
 };
 
 class Random : public Pager {
@@ -269,9 +276,6 @@ class Random : public Pager {
         frame_t *fp = &(frame_table[hand]);
         return fp;
     };
-
-   private:
-    int hand = 0;
 };
 
 class Clock : public Pager {
@@ -293,9 +297,6 @@ class Clock : public Pager {
         }
         return fp;
     };
-
-   private:
-    int hand = 0;
 };
 
 class NRU : public Pager {
@@ -337,7 +338,6 @@ class NRU : public Pager {
     };
 
    private:
-    int hand = 0;
     unsigned long tao = 50;
     unsigned long last_update = -1;
     frame_t *rm_class[4] = {0};
@@ -375,9 +375,6 @@ class Aging : public Pager {
         hand = (fp->fid + 1) % num_frames;
         return fp;
     };
-
-   private:
-    int hand = 0;
 };
 
 class WorkingSet : public Pager {
@@ -407,7 +404,6 @@ class WorkingSet : public Pager {
     };
 
    private:
-    int hand = 0;
     unsigned long tao = 50;
 };
 
